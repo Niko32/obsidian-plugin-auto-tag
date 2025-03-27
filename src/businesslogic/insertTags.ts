@@ -208,10 +208,7 @@ export const commandFnInsertTagsForSelectedText = async (editor: Editor, view: M
 	if (settings.showPreUpdateDialog) {
 		const fetchTagsFunction = async () => {
 			const suggestedTags = await getAutoTags(selectedText, allExistingTags, settings);
-			const finalTags = suggestedTags.filter(x => !pageExistingTags.includes(x));
-
-			AutoTagPlugin.Logger.log('pageTags: ' + pageExistingTags + ', finalTags: ' + finalTags);
-			return finalTags;
+			return suggestedTags.filter(x => !pageExistingTags.includes(x));
 		};
 
 		const onAccept = async (acceptedTags: string[]) => {

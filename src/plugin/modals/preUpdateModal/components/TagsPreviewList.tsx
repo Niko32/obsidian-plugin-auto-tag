@@ -52,6 +52,22 @@ export function TagsPreviewList(props: TagsPreviewListProps): JSX.Element {
 		return () => clearTimeout(timeout);
 	}, [isLoading]);
 
+	if (!isLoading && !tags.length) {
+		setTimeout(onCancel, 3000);
+
+		return (
+			<div>
+				<div>No new tags!</div>
+				<button
+					onClick={onCancel}
+					className="btn btn-secondary"
+				>
+					OK
+				</button>
+			</div>
+		)
+	}
+
 	return (
 		<div>
 			{isLoading ? <div>
