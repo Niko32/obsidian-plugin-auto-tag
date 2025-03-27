@@ -7,7 +7,7 @@ import {AutoTagPluginSettings} from "../plugin/settings/settings";
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 // const llmPromptTagSuggestionsAlternative  = 'You are ChatGPT, a helpful multi-lingual assistant and text analysis tool. You help with semantic understanding and text classification of received user input text and provide suggestions for tags that best allow to categorize and identify the text, for use in search engines or content linking and grouping or semantic search of related content. You will receive the input text from the user, delimited by the --start-- and --end-- tags. Consider the context of the text, reason step by step about what it is about, then suggest tags that best describe the user\'s text. Rather than specific to this text, it should grasp the topic and meaning so that the tags can help find other related similar content.';
-const llmPromptTagSuggestions = 'You are ChatGPT, a helpful multi-lingual assistant and text analysis tool. You help with semantic understanding and text classification of received user input text and provide suggestions for tags that best allow to categorize and identify the text, for use in search engines or content linking and grouping or semantic search of related content. You will receive the input text from the user, delimited by the --start-- and --end-- tags. Consider the context of the text, what is it about if you take a step back? Suggest tags that best describe the user\'s text. Rather than specific to this text, it should grasp the topic and meaning so that the tags can help find other related similar content.';
+const llmPromptTagSuggestions = 'You are ChatGPT, a helpful multi-lingual assistant and text analysis tool. You help with semantic understanding and text classification of received user input text and provide suggestions for tags that best allow to categorize and identify the text, for use in search engines or content linking and grouping or semantic search of related content. You will receive the input text from the user, delimited by the --start-- and --end-- tags. Existing tags to consider using are below, between <existingTags> and </existingTags>. Consider the context of the text, what is it about if you take a step back? Suggest tags that best describe the user\'s text. Rather than specific to this text, it should grasp the topic and meaning so that the tags can help find other related similar content.';
 
 const gptTagHandlingFunctionDescription = 'This function needs to receive a list of tags, that you suggest based on the best matching tags that describe the user-provided input text. Return at least 1 tag. Return at most 10 tags. The tags should be in the language of the user-provided input text.';
 
@@ -31,7 +31,7 @@ export const gptFunction: GptFunction = {
 	},
 };
 
-export async function getTagSuggestions(settings: AutoTagPluginSettings, inputText: string, openaiApiKey: string): Promise<string[] | null> {
+export async function getTagSuggestions(settings: AutoTagPluginSettings, inputText: string, knownTags: string[], openaiApiKey: string): Promise<string[] | null> {
 	if (openaiApiKey === '' || !openaiApiKey) {
 		new Notice(createDocumentFragment(`<strong>Auto Tag plugin</strong><br>Error: OpenAI API key is missing. Please add it in the plugin settings.`));
 		return [];
@@ -41,7 +41,7 @@ export async function getTagSuggestions(settings: AutoTagPluginSettings, inputTe
 		const responseData: {
 			tags?: string[],
 			error?: { type: string, message: string, param: any, code: any }
-		} = await fetchOpenAIFunctionCall(settings, openaiApiKey, inputText, gptFunction);
+		} = await fetchOpenAIFunctionCall(settings, openaiApiKey, inputText, knownTags, gptFunction);
 
 		if (responseData?.tags) {
 			AutoTagPlugin.Logger.debug('OpenAI API suggested tags:', JSON.stringify(responseData));
@@ -58,7 +58,7 @@ export async function getTagSuggestions(settings: AutoTagPluginSettings, inputTe
 	return [];
 }
 
-export function getOpenAIFunctionCallBody(settings: AutoTagPluginSettings, inputText: string) {
+export function getOpenAIFunctionCallBody(settings: AutoTagPluginSettings, inputText: string, knownTags: string[]) {
 	return JSON.stringify({
 		model: settings.openaiModel.id,
 		max_tokens: 350, // could set a multiple of the max number of tags desired
@@ -70,7 +70,7 @@ export function getOpenAIFunctionCallBody(settings: AutoTagPluginSettings, input
 			},
 			{
 				role: 'user',
-				content: "--start--\n" + inputText + "\n--end--",
+				content: "--start--\n" + inputText + "\n--end--\n\n<existingTags>\n" + knownTags + "\n</existingTags>",
 			},
 		],
 		functions: [gptFunction],
@@ -82,7 +82,7 @@ export function getOpenAIFunctionCallBody(settings: AutoTagPluginSettings, input
  * Uses OpenAI's API to request tags for the given input text.
  * Uses Function Calling to easily handle the response.
  */
-export async function fetchOpenAIFunctionCall(settings: AutoTagPluginSettings, openaiApiKey: string, inputText: string, gptFunction: GptFunction): Promise<{
+export async function fetchOpenAIFunctionCall(settings: AutoTagPluginSettings, openaiApiKey: string, inputText: string, knownTags: string[], gptFunction: GptFunction): Promise<{
 	tags: string[]
 }> {
 	if (inputText.trim().length === 0) {
@@ -100,7 +100,7 @@ export async function fetchOpenAIFunctionCall(settings: AutoTagPluginSettings, o
 				'Content-Type': 'application/json',
 				Authorization: `Bearer ${openaiApiKey}`,
 			},
-			body: getOpenAIFunctionCallBody(settings, inputText)
+			body: getOpenAIFunctionCallBody(settings, inputText, knownTags)
 		};
 		AutoTagPlugin.Logger.log(`OpenAI API request (ID ${requestId}) starting...`);
 		const response: RequestUrlResponse = await requestUrl(

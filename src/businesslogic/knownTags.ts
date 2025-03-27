@@ -1,33 +1,18 @@
-import { App } from "obsidian";
+import {App, getAllTags, TFile} from "obsidian";
 
-export const getKnownTags = async (app: App): Promise<string[]> => {
+export const getKnownTags = async (app: App, file: TFile | null = null): Promise<string[]> => {
     const { vault, metadataCache } = app;
     const tags: string[] = [];
 
-    // // See how much text was processed:
-    // const fileContents: string[] = await Promise.all(
-    //     vault.getMarkdownFiles().map(async (file) => vault.cachedRead(file))
-    // );
-    // let totalLength = 0;
-    // fileContents.forEach((content) => {
-    //     totalLength += content.length;
-    // });
+	const mkdFiles = file ? [file] : vault.getMarkdownFiles();
 
-    vault.getMarkdownFiles().forEach((file, index) => {
-        metadataCache.getFileCache(file)?.tags?.forEach((tag) => {
-            if (!tags.includes(tag.tag)) {
-                tags.push(tag.tag);
-            }
-        });
-
-        // TODO Separate #autotags/... from other tags
-
-        // TODO Could also use this to get the autotags: from frontmatter
-        // metadataCache.getFileCache(file)?.frontmatter?. ....
-        // Can also get headings, list items, blocks, embeds, etc. see CachedMetadata
+    mkdFiles.forEach((file, index) => {
+		const mdc = metadataCache.getFileCache(file);
+		if (mdc) {
+			const x = getAllTags(mdc) || [];
+			tags.push(...x)
+		}
     });
 
-    // AutoTagPlugin.Logger.debug(`Found ${tags.length} tags in ${fileContents.length} files with a total length of ${totalLength} characters.`);
-
-    return tags;
+    return tags.map(tag => tag.replace('#', ''));
 }

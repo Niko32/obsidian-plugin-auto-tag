@@ -6,12 +6,13 @@ import {getTagSuggestions} from "src/services/openai.api";
 import {createDocumentFragment, customCaseConversion} from "src/utils/utils";
 import {kebabCase, camelCase, pascalCase, snakeCase, constantCase, pascalSnakeCase, trainCase} from "change-case";
 import Logger from "../plugin/Logger";
+import {getKnownTags} from "./knownTags";
 
 // Several combinations:
 // - insert demo tags or real tags (real -> fetch them first)
 // - insert in frontmatter or after the selected text
 
-const getAutoTags = async (inputText: string, settings: AutoTagPluginSettings) => {
+const getAutoTags = async (inputText: string, knownTags: string[], settings: AutoTagPluginSettings) => {
 	let autotags: string[];
 	if (settings.demoMode) {
 		// timeout to mimic API call
@@ -50,7 +51,7 @@ const getAutoTags = async (inputText: string, settings: AutoTagPluginSettings) =
 			throw new Error("Error removing frontmatter from message" + err);
 		}
 
-		autotags = await getTagSuggestions(settings, mainInputText, settings.openaiApiKey) || [];
+		autotags = await getTagSuggestions(settings, mainInputText, knownTags, settings.openaiApiKey) || [];
 	} else {
 		const notice = createDocumentFragment(`<strong>Auto Tag plugin</strong><br>Error: OpenAI API key is missing. Please add it in the plugin settings.`);
 		new Notice(notice);
@@ -201,8 +202,17 @@ export const commandFnInsertTagsForSelectedText = async (editor: Editor, view: M
 		return;
 	}
 
+	const allExistingTags = await getKnownTags(view.app);
+	const pageExistingTags = await getKnownTags(view.app, view.file);
+
 	if (settings.showPreUpdateDialog) {
-		const fetchTagsFunction = () => getAutoTags(selectedText, settings);
+		const fetchTagsFunction = async () => {
+			const suggestedTags = await getAutoTags(selectedText, allExistingTags, settings);
+			const finalTags = suggestedTags.filter(x => !pageExistingTags.includes(x));
+
+			AutoTagPlugin.Logger.log('pageTags: ' + pageExistingTags + ', finalTags: ' + finalTags);
+			return finalTags;
+		};
 
 		const onAccept = async (acceptedTags: string[]) => {
 			AutoTagPlugin.Logger.debug("Tags accepted for insertion:", acceptedTags);
@@ -217,16 +227,17 @@ export const commandFnInsertTagsForSelectedText = async (editor: Editor, view: M
 			AutoTagPlugin.Logger.debug("Tags insertion cancelled by user.");
 		}
 
-		new PreUpdateModal(app, settings, fetchTagsFunction, onAccept, onCancel).open();
+		new PreUpdateModal(view.app, settings, fetchTagsFunction, onAccept, onCancel).open();
 	} else {
 		/**
 		 * Retrieve tag suggestions.
 		 */
-		const suggestedTags = await getAutoTags(selectedText, settings) || [];
+		const suggestedTags = await getAutoTags(selectedText, allExistingTags, settings) || [];
+		const finalTags = suggestedTags.filter(x => !allExistingTags.includes(x));
 
 		/**
 		 * Insert the tags in the note right away.
 		 */
-		await insertTags(view, insertLocation, suggestedTags, editor, settings, initialCursorPos, selectedTextLength);
+		await insertTags(view, insertLocation, finalTags, editor, settings, initialCursorPos, selectedTextLength);
 	}
 }
