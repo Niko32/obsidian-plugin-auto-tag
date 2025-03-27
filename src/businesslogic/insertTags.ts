@@ -202,15 +202,15 @@ export const commandFnInsertTagsForSelectedText = async (editor: Editor, view: M
 		return;
 	}
 
-	const allExistingTags = await getKnownTags(view.app);
-	const pageExistingTags = await getKnownTags(view.app, view.file);
+	const fetchTagsFunction = async () => {
+		const allExistingTags = await getKnownTags(view.app);
+		const pageExistingTags = await getKnownTags(view.app, view.file);
+		const suggestedTags = await getAutoTags(selectedText, allExistingTags, settings) || [];
+
+		return suggestedTags.filter(x => !pageExistingTags.includes(x));
+	};
 
 	if (settings.showPreUpdateDialog) {
-		const fetchTagsFunction = async () => {
-			const suggestedTags = await getAutoTags(selectedText, allExistingTags, settings);
-			return suggestedTags.filter(x => !pageExistingTags.includes(x));
-		};
-
 		const onAccept = async (acceptedTags: string[]) => {
 			AutoTagPlugin.Logger.debug("Tags accepted for insertion:", acceptedTags);
 
@@ -229,8 +229,7 @@ export const commandFnInsertTagsForSelectedText = async (editor: Editor, view: M
 		/**
 		 * Retrieve tag suggestions.
 		 */
-		const suggestedTags = await getAutoTags(selectedText, allExistingTags, settings) || [];
-		const finalTags = suggestedTags.filter(x => !pageExistingTags.includes(x));
+		const finalTags = await fetchTagsFunction();
 
 		/**
 		 * Insert the tags in the note right away.
