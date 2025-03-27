@@ -230,7 +230,7 @@ export const commandFnInsertTagsForSelectedText = async (editor: Editor, view: M
 		 * Retrieve tag suggestions.
 		 */
 		const suggestedTags = await getAutoTags(selectedText, allExistingTags, settings) || [];
-		const finalTags = suggestedTags.filter(x => !allExistingTags.includes(x));
+		const finalTags = suggestedTags.filter(x => !pageExistingTags.includes(x));
 
 		/**
 		 * Insert the tags in the note right away.
