@@ -7,7 +7,7 @@ import {AutoTagPluginSettings} from "../plugin/settings/settings";
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 // const llmPromptTagSuggestionsAlternative  = 'You are ChatGPT, a helpful multi-lingual assistant and text analysis tool. You help with semantic understanding and text classification of received user input text and provide suggestions for tags that best allow to categorize and identify the text, for use in search engines or content linking and grouping or semantic search of related content. You will receive the input text from the user, delimited by the --start-- and --end-- tags. Consider the context of the text, reason step by step about what it is about, then suggest tags that best describe the user\'s text. Rather than specific to this text, it should grasp the topic and meaning so that the tags can help find other related similar content.';
-const llmPromptTagSuggestions = 'You are ChatGPT, a helpful multi-lingual assistant and text analysis tool. You help with semantic understanding and text classification of received user input text and provide suggestions for tags that best allow to categorize and identify the text, for use in search engines or content linking and grouping or semantic search of related content. You will receive the input text from the user, delimited by the --start-- and --end-- tags. Existing tags to consider using are below, between <existingTags> and </existingTags>. Consider the context of the text, what is it about if you take a step back? Suggest tags that best describe the user\'s text. Rather than specific to this text, it should grasp the topic and meaning so that the tags can help find other related similar content.';
+const llmPromptTagSuggestions = 'You are ChatGPT, a helpful multi-lingual assistant and text analysis tool. You help with semantic understanding and text classification of received user input text and provide suggestions for tags that best allow to categorize and identify the text, for use in search engines or content linking and grouping or semantic search of related content. You will receive the input text from the user, delimited by <text> and </text>. Existing tags to consider using are below, between <existingTags> and </existingTags>. Consider the context of the text, what is it about if you take a step back? Suggest tags that best describe the user\'s text. Rather than specific to this text, it should grasp the topic and meaning so that the tags can help find other related similar content. Always try to generate at least 7 tags.';
 
 const gptTagHandlingFunctionDescription = 'This function needs to receive a list of tags, that you suggest based on the best matching tags that describe the user-provided input text. Return at least 1 tag. Return at most 10 tags. The tags should be in the language of the user-provided input text.';
 
@@ -70,7 +70,7 @@ export function getOpenAIFunctionCallBody(settings: AutoTagPluginSettings, input
 			},
 			{
 				role: 'user',
-				content: "--start--\n" + inputText + "\n--end--\n\n<existingTags>\n" + knownTags + "\n</existingTags>",
+				content: "<text>\n" + inputText + "\n</text>\n\n<existingTags>\n" + knownTags + "\n</existingTags>",
 			},
 		],
 		functions: [gptFunction],
