@@ -174,7 +174,7 @@ export class AutoTagSettingTab extends PluginSettingTab {
 		.setName(`OpenAI API model`)
 		.setDesc(createDocumentFragment(`The OpenAI model used to generate tags.`))
 		.addDropdown(dropdown => {
-				OPENAI_API_MODELS.map(model => dropdown.addOption(model.id, model.name));
+				OPENAI_API_MODELS.forEach(model => dropdown.addOption(model.id, model.name));
 				dropdown.setValue(`${this.plugin.settings.openaiModel.id}`);
 				dropdown.onChange(async (value) => {
 					this.plugin.settings.openaiModel = OPENAI_API_MODELS.find(model => model.id === value) || OPENAI_API_MODELS[0];
