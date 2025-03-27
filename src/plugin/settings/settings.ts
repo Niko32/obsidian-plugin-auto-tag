@@ -3,6 +3,8 @@ import AutoTagPlugin from "../autoTagPlugin";
 import {createDocumentFragment} from "src/utils/utils";
 import {OPENAI_API_MODELS} from "../../services/openaiModelsList";
 import {LlmModel} from "../../services/models/openai.models";
+import {Simulate} from "react-dom/test-utils";
+import drop = Simulate.drop;
 
 export interface AutoTagPluginSettings {
 	useAutotagPrefix: boolean;
@@ -170,7 +172,16 @@ export class AutoTagSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 		.setName(`OpenAI API model`)
-		.setDesc(createDocumentFragment(`The OpenAI <strong>GPT-3.5 Turbo model</strong> is used by default (rather than GPT-4) as it's really good for this task and the cheapest choice. Contact me if this is not enough for your needs.`));
+		.setDesc(createDocumentFragment(`The OpenAI model used to generate tags.`))
+		.addDropdown(dropdown => {
+				OPENAI_API_MODELS.map(model => dropdown.addOption(model.id, model.name));
+				dropdown.setValue(`${this.plugin.settings.openaiModel.id}`);
+				dropdown.onChange(async (value) => {
+					this.plugin.settings.openaiModel = OPENAI_API_MODELS.find(model => model.id === value) || OPENAI_API_MODELS[0];
+					await this.plugin.saveSettings();
+				});
+			}
+		)
 
 		new Setting(containerEl)
 		.setName(`Predictability of the results`)
