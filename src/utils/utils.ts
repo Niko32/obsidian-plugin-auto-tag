@@ -1,5 +1,5 @@
 import {LlmModel} from "../services/models/openai.models";
-import {encodingForModel} from "js-tiktoken";
+import {encodingForModel, TiktokenModel} from "js-tiktoken";
 import {getOpenAIFunctionCallBody} from "../services/openai.api";
 import {AutoTagPluginSettings} from "../plugin/settings/settings";
 
@@ -61,13 +61,31 @@ export function customCaseConversion(tag: string, format: string): string {
 
 /**
  * Tokenizes a string and returns the tokens count.
+ * Uses the appropriate encoding model based on the selected model.
  *
- * @param text
+ * @param text The text to tokenize
+ * @param modelId The model ID to determine which encoding to use
  */
-export const getTokenCount = (text: string): number => {
-	const enc = encodingForModel("gpt-3.5-turbo-0613");
-	const tokens = enc.encode(text);
-	return tokens.length;
+export const getTokenCount = (text: string, modelId: string = "gpt-3.5-turbo"): number => {
+	// 针对不同模型使用不同的编码
+	let encodingModel: TiktokenModel = "gpt-3.5-turbo";
+	
+	// 对于GPT-4模型，使用对应的编码
+	if (modelId.startsWith("gpt-4")) {
+		encodingModel = "gpt-4";
+	}
+	
+	try {
+		const enc = encodingForModel(encodingModel);
+		const tokens = enc.encode(text);
+		return tokens.length;
+	} catch (error) {
+		// 如果找不到特定模型的编码，回退到默认编码
+		console.warn(`Could not find encoding for model ${modelId}, using default encoding.`);
+		const enc = encodingForModel("gpt-3.5-turbo" as TiktokenModel);
+		const tokens = enc.encode(text);
+		return tokens.length;
+	}
 }
 
 /**
@@ -76,7 +94,7 @@ export const getTokenCount = (text: string): number => {
  */
 export const calculateTokenCost = (settings: AutoTagPluginSettings, text: string, modelData: LlmModel): { tokenCount: number, cost: number } => {
 	const apiCallBody = getOpenAIFunctionCallBody(settings, text);
-	const tokenCount = getTokenCount(apiCallBody);
+	const tokenCount = getTokenCount(apiCallBody, modelData.id);
 	const queryCost = tokenCount / 1000 * modelData.inputCost1KTokens;
 	const responseCost = tokenCount / 1000 * modelData.outputCost1KTokens;
 	const cost = queryCost + responseCost;

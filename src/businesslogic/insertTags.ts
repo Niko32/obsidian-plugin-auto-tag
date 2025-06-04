@@ -53,7 +53,7 @@ const getAutoTags = async (inputText: string, knownTags: string[], settings: Aut
 
 		autotags = await getTagSuggestions(settings, mainInputText, knownTags, settings.openaiApiKey) || [];
 	} else {
-		const notice = createDocumentFragment(`<strong>Auto Tag plugin</strong><br>Error: OpenAI API key is missing. Please add it in the plugin settings.`);
+		const notice = createDocumentFragment(`<strong>Auto Tag plugin</strong><br>Error: API key is missing. Please add it in the plugin settings.`);
 		new Notice(notice);
 		return [];
 	}
@@ -197,7 +197,7 @@ export const commandFnInsertTagsForSelectedText = async (editor: Editor, view: M
 	}
 
 	if (!settings.demoMode && (settings.openaiApiKey.length === 0 || !settings.openaiApiKey)) {
-		const notice = createDocumentFragment(`<strong>Auto Tag plugin</strong><br>Error: OpenAI API key is missing. Please add it in the plugin settings.`);
+		const notice = createDocumentFragment(`<strong>Auto Tag plugin</strong><br>Error: API key is missing. Please add it in the plugin settings.`);
 		new Notice(notice);
 		return;
 	}

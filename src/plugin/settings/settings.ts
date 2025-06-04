@@ -1,4 +1,4 @@
-import {App, FileSystemAdapter, Notice, PluginSettingTab, Setting} from "obsidian";
+import {App, FileSystemAdapter, Modal, Notice, PluginSettingTab, Setting} from "obsidian";
 import AutoTagPlugin from "../autoTagPlugin";
 import {createDocumentFragment} from "src/utils/utils";
 import {OPENAI_API_MODELS} from "../../services/openaiModelsList";
@@ -18,6 +18,9 @@ export interface AutoTagPluginSettings {
 	openaiApiKey: string;
 	openaiModel: LlmModel;
 	openaiTemperature: number;
+	customBaseUrl: string;
+	useCustomBaseUrl: boolean;
+	customModels: LlmModel[];
 }
 
 export const DEFAULT_SETTINGS: AutoTagPluginSettings = {
@@ -32,6 +35,9 @@ export const DEFAULT_SETTINGS: AutoTagPluginSettings = {
 	openaiApiKey: "",
 	openaiModel: OPENAI_API_MODELS[0],
 	openaiTemperature: 0.2,
+	customBaseUrl: "",
+	useCustomBaseUrl: false,
+	customModels: [],
 }
 
 export class AutoTagSettingTab extends PluginSettingTab {
@@ -162,26 +168,116 @@ export class AutoTagSettingTab extends PluginSettingTab {
 		.setName(`Service provider`);
 
 		new Setting(containerEl)
-		.setName(`Service provider to find tags from text`)
-		.setDesc(createDocumentFragment(`For now only OpenAI is supported.<br>Ideas and requests are welcome (for better/cheaper/more privacy focused options).`))
-		.addDropdown(dropdown => dropdown
-			.addOption("openai", 'OpenAI')
-			.setValue("openai")
-		)
-		.setDisabled(true);
+		.setName(`Custom API Base URL`)
+		.setDesc(createDocumentFragment(`Use a custom API URL instead of the default OpenAI URL. Useful for self-hosted models or OpenAI-compatible APIs.`))
+		.addToggle(toggle => {
+			toggle.setValue(this.plugin.settings.useCustomBaseUrl)
+			toggle.onChange(async (toggleValue: boolean) => {
+				this.plugin.settings.useCustomBaseUrl = toggleValue;
+				await this.plugin.saveSettings();
+			})
+		});
+
+		if (this.plugin.settings.useCustomBaseUrl) {
+			new Setting(containerEl)
+			.setName(`Base URL`)
+			.setDesc(createDocumentFragment(`The base URL for the API. Should be in the format "https://api.example.com".`))
+			.addText(text => text
+				.setPlaceholder('https://api.example.com')
+				.setValue(this.plugin.settings.customBaseUrl)
+				.onChange(async (value) => {
+					this.plugin.settings.customBaseUrl = value;
+					await this.plugin.saveSettings();
+				})
+			);
+		}
+
+		const getAllModels = () => {
+			return [...OPENAI_API_MODELS, ...this.plugin.settings.customModels];
+		};
 
 		new Setting(containerEl)
-		.setName(`OpenAI API model`)
-		.setDesc(createDocumentFragment(`The OpenAI model used to generate tags.`))
+		.setName(`API model`)
+		.setDesc(createDocumentFragment(`The model used to generate tags.`))
 		.addDropdown(dropdown => {
-				OPENAI_API_MODELS.forEach(model => dropdown.addOption(model.id, model.name));
+				getAllModels().forEach(model => dropdown.addOption(model.id, model.name));
 				dropdown.setValue(`${this.plugin.settings.openaiModel.id}`);
 				dropdown.onChange(async (value) => {
-					this.plugin.settings.openaiModel = OPENAI_API_MODELS.find(model => model.id === value) || OPENAI_API_MODELS[0];
+					this.plugin.settings.openaiModel = getAllModels().find(model => model.id === value) || getAllModels()[0];
 					await this.plugin.saveSettings();
 				});
 			}
-		)
+		);
+
+		new Setting(containerEl)
+		.setName(`Add custom model`)
+		.setDesc(createDocumentFragment(`Add a custom model to use with the API.`))
+		.addButton(button => button
+			.setButtonText("+")
+			.onClick(async () => {
+				const newCustomModelModal = new CustomModelModal(this.app, async (model: LlmModel) => {
+					this.plugin.settings.customModels.push(model);
+					await this.plugin.saveSettings();
+					this.display(); // Refresh the settings page
+				});
+				newCustomModelModal.open();
+			})
+		);
+
+		// Display custom models with edit/delete buttons
+		if (this.plugin.settings.customModels.length > 0) {
+			const customModelsContainer = containerEl.createDiv();
+			customModelsContainer.addClass("custom-models-container");
+			
+			const customModelsHeader = customModelsContainer.createEl("h3", {
+				text: "Custom Models"
+			});
+			
+			this.plugin.settings.customModels.forEach((model, index) => {
+				const modelContainer = customModelsContainer.createDiv();
+				modelContainer.addClass("custom-model-item");
+				
+				const modelInfo = modelContainer.createDiv();
+				modelInfo.innerHTML = `<strong>${model.name}</strong> (${model.id})<br>
+					Context: ${model.context}, Input cost: ${model.inputCost1KTokens}, Output cost: ${model.outputCost1KTokens}`;
+				
+				const buttonContainer = modelContainer.createDiv();
+				buttonContainer.addClass("custom-model-buttons");
+				
+				const editButton = buttonContainer.createEl("button", {
+					text: "Edit"
+				});
+				editButton.addClass("mod-cta");
+				editButton.addEventListener("click", () => {
+					const editCustomModelModal = new CustomModelModal(this.app, async (updatedModel: LlmModel) => {
+						this.plugin.settings.customModels[index] = updatedModel;
+						
+						// If the current model is the one being edited, update it too
+						if (this.plugin.settings.openaiModel.id === model.id) {
+							this.plugin.settings.openaiModel = updatedModel;
+						}
+						
+						await this.plugin.saveSettings();
+						this.display(); // Refresh the settings page
+					}, model);
+					editCustomModelModal.open();
+				});
+				
+				const deleteButton = buttonContainer.createEl("button", {
+					text: "Delete"
+				});
+				deleteButton.addEventListener("click", async () => {
+					// If the current model is the one being deleted, reset to default
+					if (this.plugin.settings.openaiModel.id === model.id) {
+						this.plugin.settings.openaiModel = OPENAI_API_MODELS[0];
+					}
+					
+					this.plugin.settings.customModels.splice(index, 1);
+					await this.plugin.saveSettings();
+					this.display(); // Refresh the settings page
+				});
+			});
+		}
 
 		new Setting(containerEl)
 		.setName(`Predictability of the results`)
@@ -198,15 +294,15 @@ export class AutoTagSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-		.setName('OpenAI API key')
-		.setDesc(createDocumentFragment(`Create a new API key at <a href="https://platform.openai.com" target="_blank">https://platform.openai.com</a>, set up your billing (set a max limit of 1$ or 5$ for example) and paste the key here.`))
+		.setName('API key')
+		.setDesc(createDocumentFragment(`API key for authentication. For OpenAI, create a new API key at <a href="https://platform.openai.com" target="_blank">https://platform.openai.com</a>, set up your billing (set a max limit of 1$ or 5$ for example) and paste the key here.`))
 		.addText(text => text
 			.setPlaceholder('secret-key-...')
 			.setValue(this.plugin.settings.openaiApiKey)
 			.onChange(async (value) => {
 				this.plugin.settings.openaiApiKey = value;
 				await this.plugin.saveSettings();
-				new Notice('OpenAI API key saved.');
+				new Notice('API key saved.');
 			})
 		);
 
@@ -234,5 +330,135 @@ export class AutoTagSettingTab extends PluginSettingTab {
 				});
 			});
 		}
+	}
+}
+
+// Modal for adding/editing custom models
+export class CustomModelModal extends Modal {
+	model: LlmModel | undefined;
+	onSubmit: (model: LlmModel) => void;
+
+	constructor(app: App, onSubmit: (model: LlmModel) => void, model?: LlmModel) {
+		super(app);
+		this.onSubmit = onSubmit;
+		this.model = model;
+	}
+
+	onOpen() {
+		const {contentEl} = this;
+		contentEl.empty();
+
+		contentEl.createEl("h2", {text: this.model ? "Edit Custom Model" : "Add Custom Model"});
+
+		// Model ID
+		const modelIdSetting = new Setting(contentEl)
+			.setName("Model ID")
+			.setDesc("The identifier of the model")
+			.addText(text => text
+				.setPlaceholder("my-custom-model")
+				.setValue(this.model?.id || "")
+				.onChange(value => {
+					// Just update the field, we'll collect on submit
+				})
+			);
+
+		// Model Name
+		const modelNameSetting = new Setting(contentEl)
+			.setName("Model Name")
+			.setDesc("The display name of the model")
+			.addText(text => text
+				.setPlaceholder("My Custom Model")
+				.setValue(this.model?.name || "")
+				.onChange(value => {
+					// Just update the field, we'll collect on submit
+				})
+			);
+
+		// Context size
+		const contextSizeSetting = new Setting(contentEl)
+			.setName("Context Size")
+			.setDesc("Maximum number of tokens this model can process")
+			.addText(text => text
+				.setPlaceholder("4096")
+				.setValue(this.model?.context?.toString() || "4096")
+				.onChange(value => {
+					// Just update the field, we'll collect on submit
+				})
+			);
+
+		// Input cost
+		const inputCostSetting = new Setting(contentEl)
+			.setName("Input Cost per 1K tokens")
+			.setDesc("Cost in USD per 1,000 tokens for input")
+			.addText(text => text
+				.setPlaceholder("0.0005")
+				.setValue(this.model?.inputCost1KTokens?.toString() || "0.0005")
+				.onChange(value => {
+					// Just update the field, we'll collect on submit
+				})
+			);
+
+		// Output cost
+		const outputCostSetting = new Setting(contentEl)
+			.setName("Output Cost per 1K tokens")
+			.setDesc("Cost in USD per 1,000 tokens for output")
+			.addText(text => text
+				.setPlaceholder("0.0015")
+				.setValue(this.model?.outputCost1KTokens?.toString() || "0.0015")
+				.onChange(value => {
+					// Just update the field, we'll collect on submit
+				})
+			);
+
+		// Submit button
+		new Setting(contentEl)
+			.addButton(button => button
+				.setButtonText(this.model ? "Save" : "Add")
+				.setCta()
+				.onClick(() => {
+					const id = modelIdSetting.controlEl.querySelector('input')?.value;
+					const name = modelNameSetting.controlEl.querySelector('input')?.value;
+					const contextStr = contextSizeSetting.controlEl.querySelector('input')?.value;
+					const inputCostStr = inputCostSetting.controlEl.querySelector('input')?.value;
+					const outputCostStr = outputCostSetting.controlEl.querySelector('input')?.value;
+
+					if (!id || !name || !contextStr || !inputCostStr || !outputCostStr) {
+						new Notice("All fields are required");
+						return;
+					}
+
+					const context = parseInt(contextStr);
+					const inputCost = parseFloat(inputCostStr);
+					const outputCost = parseFloat(outputCostStr);
+
+					if (isNaN(context) || isNaN(inputCost) || isNaN(outputCost)) {
+						new Notice("Invalid number format");
+						return;
+					}
+
+					const newModel: LlmModel = {
+						id,
+						name,
+						features: ["function-calling"],
+						context,
+						inputCost1KTokens: inputCost,
+						outputCost1KTokens: outputCost
+					};
+
+					this.onSubmit(newModel);
+					this.close();
+				})
+			)
+			.addButton(button => button
+				.setButtonText("Cancel")
+				.onClick(() => {
+					this.close();
+				})
+			);
+	}
+
+	onClose() {
+		const {contentEl} = this;
+		contentEl.empty();
 	}
 }

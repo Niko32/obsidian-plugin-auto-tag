@@ -74,7 +74,7 @@ export function TagsPreviewList(props: TagsPreviewListProps): JSX.Element {
 					Loading...
 					<br/>
 					{isSlowLoading ?
-						<div className="text-sm text-gray-400">OpenAI can be really slow at times, please wait...</div>
+						<div className="text-sm text-gray-400">The API can be slow at times, please wait...</div>
 						: <br/>
 					}
 				</div> :
