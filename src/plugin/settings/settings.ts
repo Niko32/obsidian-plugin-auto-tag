@@ -314,6 +314,19 @@ export class AutoTagSettingTab extends PluginSettingTab {
 		.setHeading()
 		.setName('Debugging info & stats');
 
+		new Setting(containerEl)
+		.setName("API Debug Console")
+		.setDesc(createDocumentFragment("View detailed information about API requests and responses. Helpful for troubleshooting issues with API connections."))
+		.addButton(button => button
+			.setButtonText("Open Debug Console")
+			.setCta()
+			.onClick(() => {
+				// 引入调试模态窗口并打开
+				const { DebugRequestModal } = require('../modals/debugModal/debugModal');
+				new DebugRequestModal(this.app, this.plugin).open();
+			})
+		);
+
 		let logFilePath;
 		const adapter = app.vault.adapter;
 		if (adapter instanceof FileSystemAdapter) {

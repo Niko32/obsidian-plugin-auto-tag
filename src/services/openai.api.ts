@@ -105,33 +105,92 @@ export async function fetchOpenAIFunctionCall(settings: AutoTagPluginSettings, o
 	}
 
 	const requestId = Math.random().toString(36).substring(2, 10).toUpperCase();
+	const apiEndpoint = getApiEndpoint(settings);
+	const requestBody = getOpenAIFunctionCallBody(settings, inputText, knownTags);
+
+	// 获取插件实例以记录调试信息
+	const plugin = (window as any).app.plugins.plugins["auto-tag"];
+	if (!plugin) {
+		AutoTagPlugin.Logger.warn('Could not find plugin instance for debugging');
+	}
+
+	// 创建调试日志条目
+	const debugLog: {
+		apiEndpoint: string;
+		requestBody: string;
+		responseData?: string;
+		errorMessage?: string;
+		timestamp: number;
+	} = {
+		apiEndpoint,
+		requestBody,
+		timestamp: Date.now()
+	};
 
 	try {
 		const requestUrlParam: RequestUrlParam = {
-			url: OPENAI_API_URL,
+			url: apiEndpoint,
 			method: "POST",
 			headers: {
 				'Content-Type': 'application/json',
 				Authorization: `Bearer ${openaiApiKey}`,
 			},
-			body: getOpenAIFunctionCallBody(settings, inputText, knownTags)
+			body: requestBody
 		};
-		AutoTagPlugin.Logger.log(`OpenAI API request (ID ${requestId}) starting...`);
+		AutoTagPlugin.Logger.log(`LLM API request (ID ${requestId}) starting...`);
+		AutoTagPlugin.Logger.debug(`Using API endpoint: ${apiEndpoint}`);
+		
 		const response: RequestUrlResponse = await requestUrl(
 			requestUrlParam
 		);
-		AutoTagPlugin.Logger.log(`OpenAI API request (ID ${requestId}) response received.`);
+		AutoTagPlugin.Logger.log(`LLM API request (ID ${requestId}) response received.`);
+
+		// 记录响应数据到调试日志
+		debugLog.responseData = JSON.stringify(response.json);
+		
+		if (plugin) {
+			plugin.addDebugLog(debugLog);
+		}
 
 		if (response.status === 200 && response.json?.choices?.[0]?.message?.function_call) {
 			return JSON.parse(response.json.choices[0].message.function_call.arguments);
 		} else if (response.json.error) {
-			AutoTagPlugin.Logger.error("OpenAI API request (ID ${requestId}) Error:", JSON.stringify(response.json));
+			AutoTagPlugin.Logger.error(`LLM API request (ID ${requestId}) Error:`, JSON.stringify(response.json));
+			
+			// 记录错误到调试日志
+			if (debugLog) {
+				debugLog.errorMessage = JSON.stringify(response.json.error);
+				if (plugin) {
+					plugin.addDebugLog(debugLog);
+				}
+			}
+			
 			return JSON.parse(response.json);
 		} else {
-			throw new Error('Error: Failed to get tags from OpenAI API.');
+			const errorMsg = 'Error: Failed to get tags from LLM API.';
+			
+			// 记录错误到调试日志
+			if (debugLog) {
+				debugLog.errorMessage = errorMsg;
+				if (plugin) {
+					plugin.addDebugLog(debugLog);
+				}
+			}
+			
+			throw new Error(errorMsg);
 		}
 	} catch (error) {
-		AutoTagPlugin.Logger.warn(`OpenAI API request (ID ${requestId}) Error: ` + error?.response?.data?.error?.message || JSON.stringify(error, null, 2));
-		throw new Error(`OpenAI API request (ID ${requestId}) Error: ` + error?.response?.data?.error?.message || JSON.stringify(error, null, 2));
+		const errorMsg = `LLM API request (ID ${requestId}) Error: ` + error?.response?.data?.error?.message || JSON.stringify(error, null, 2);
+		AutoTagPlugin.Logger.warn(errorMsg);
+		
+		// 记录错误到调试日志
+		if (debugLog) {
+			debugLog.errorMessage = errorMsg;
+			if (plugin) {
+				plugin.addDebugLog(debugLog);
+			}
+		}
+		
+		throw new Error(errorMsg);
 	}
 }
