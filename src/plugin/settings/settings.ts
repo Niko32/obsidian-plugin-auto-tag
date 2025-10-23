@@ -1,10 +1,10 @@
-import {App, FileSystemAdapter, Modal, Notice, PluginSettingTab, Setting} from "obsidian";
+import {App, FileSystemAdapter, Modal, Notice, PluginSettingTab, Setting, SuggestModal} from "obsidian";
 import AutoTagPlugin from "../autoTagPlugin";
 import {createDocumentFragment} from "src/utils/utils";
 import {OPENAI_API_MODELS} from "../../services/openaiModelsList";
-import {LlmModel} from "../../services/models/openai.models";
-import {Simulate} from "react-dom/test-utils";
-import drop = Simulate.drop;
+import {ModelType} from "../../services/models/openai.models";
+import { OpenApiModel } from "src/services/openai.api";
+import { features } from "process";
 
 export interface AutoTagPluginSettings {
 	useAutotagPrefix: boolean;
@@ -15,11 +15,11 @@ export interface AutoTagPluginSettings {
 	showPostUpdateDialog: boolean;
 	writeToLogFile: boolean;
 	openaiApiKey: string;
-	openaiModel: LlmModel;
+	openaiModel: OpenApiModel;
 	openaiTemperature: number;
 	customBaseUrl: string;
 	useCustomBaseUrl: boolean;
-	customModels: LlmModel[];
+	models: OpenApiModel[];
 }
 
 export const DEFAULT_SETTINGS: AutoTagPluginSettings = {
@@ -35,7 +35,7 @@ export const DEFAULT_SETTINGS: AutoTagPluginSettings = {
 	openaiTemperature: 0.2,
 	customBaseUrl: "",
 	useCustomBaseUrl: false,
-	customModels: [],
+	models: [],
 }
 
 export class AutoTagSettingTab extends PluginSettingTab {
@@ -146,33 +146,33 @@ export class AutoTagSettingTab extends PluginSettingTab {
 		.setHeading()
 		.setName(`Service provider`);
 
-		new Setting(containerEl)
-		.setName(`Custom API Base URL`)
-		.setDesc(createDocumentFragment(`Use a custom API URL instead of the default OpenAI URL. Useful for self-hosted models or OpenAI-compatible APIs.`))
-		.addToggle(toggle => {
-			toggle.setValue(this.plugin.settings.useCustomBaseUrl)
-			toggle.onChange(async (toggleValue: boolean) => {
-				this.plugin.settings.useCustomBaseUrl = toggleValue;
-				await this.plugin.saveSettings();
-			})
-		});
+		// new Setting(containerEl)
+		// .setName(`Custom API Base URL`)
+		// .setDesc(createDocumentFragment(`Use a custom API URL instead of the default OpenAI URL. Useful for self-hosted models or OpenAI-compatible APIs.`))
+		// .addToggle(toggle => {
+		// 	toggle.setValue(this.plugin.settings.useCustomBaseUrl)
+		// 	toggle.onChange(async (toggleValue: boolean) => {
+		// 		this.plugin.settings.useCustomBaseUrl = toggleValue;
+		// 		await this.plugin.saveSettings();
+		// 	})
+		// });
 
-		if (this.plugin.settings.useCustomBaseUrl) {
-			new Setting(containerEl)
-			.setName(`Base URL`)
-			.setDesc(createDocumentFragment(`The base URL for the API. Should be in the format "https://api.example.com".`))
-			.addText(text => text
-				.setPlaceholder('https://api.example.com')
-				.setValue(this.plugin.settings.customBaseUrl)
-				.onChange(async (value) => {
-					this.plugin.settings.customBaseUrl = value;
-					await this.plugin.saveSettings();
-				})
-			);
-		}
+		// if (this.plugin.settings.useCustomBaseUrl) {
+		// 	new Setting(containerEl)
+		// 	.setName(`Base URL`)
+		// 	.setDesc(createDocumentFragment(`The base URL for the API. Should be in the format "https://api.example.com".`))
+		// 	.addText(text => text
+		// 		.setPlaceholder('https://api.example.com')
+		// 		.setValue(this.plugin.settings.customBaseUrl)
+		// 		.onChange(async (value) => {
+		// 			this.plugin.settings.customBaseUrl = value;
+		// 			await this.plugin.saveSettings();
+		// 		})
+		// 	);
+		// }
 
 		const getAllModels = () => {
-			return [...OPENAI_API_MODELS, ...this.plugin.settings.customModels];
+			return [...OPENAI_API_MODELS, ...this.plugin.settings.models];
 		};
 
 		new Setting(containerEl)
@@ -189,47 +189,47 @@ export class AutoTagSettingTab extends PluginSettingTab {
 		);
 
 		new Setting(containerEl)
-		.setName(`Add custom model`)
-		.setDesc(createDocumentFragment(`Add a custom model to use with the API.`))
+		.setName(`Add model`)
+		.setDesc(createDocumentFragment(`Add a model to use with the API.`))
 		.addButton(button => button
 			.setButtonText("+")
 			.onClick(async () => {
-				const newCustomModelModal = new CustomModelModal(this.app, async (model: LlmModel) => {
-					this.plugin.settings.customModels.push(model);
+				new ModelTypeModal(this.app, async (model: OpenApiModel) => {
+					this.plugin.settings.models.push(model);
 					await this.plugin.saveSettings();
 					this.display(); // Refresh the settings page
-				});
-				newCustomModelModal.open();
+				}).open();
 			})
 		);
 
 		// Display custom models with edit/delete buttons
-		if (this.plugin.settings.customModels.length > 0) {
-			const customModelsContainer = containerEl.createDiv();
-			customModelsContainer.addClass("custom-models-container");
+		if (this.plugin.settings.models.length > 0) {
+			const modelsContainer = containerEl.createDiv();
+			modelsContainer.addClass("custom-models-container");
 			
-			const customModelsHeader = customModelsContainer.createEl("h3", {
-				text: "Custom Models"
-			});
+			const customModelsHeader = modelsContainer
+				.createEl("h3", {text: "Custom Models"});
 			
-			this.plugin.settings.customModels.forEach((model, index) => {
-				const modelContainer = customModelsContainer.createDiv();
+			this.plugin.settings.models.forEach((model, index) => {
+				const modelContainer = modelsContainer.createDiv();
 				modelContainer.addClass("custom-model-item");
 				
 				const modelInfo = modelContainer.createDiv();
-				modelInfo.innerHTML = `<strong>${model.name}</strong> (${model.id})<br>
-					Context: ${model.context}, Input cost: ${model.inputCost1KTokens}, Output cost: ${model.outputCost1KTokens}`;
+				modelInfo.innerHTML = `
+					<strong>${model.name}</strong> (${model.id})<br>
+					Context: ${model.context}`
+					// Input cost: ${model.inputCost1KTokens},
+					// Output cost: ${model.outputCost1KTokens}`;
 				
 				const buttonContainer = modelContainer.createDiv();
 				buttonContainer.addClass("custom-model-buttons");
 				
-				const editButton = buttonContainer.createEl("button", {
-					text: "Edit"
-				});
+				const editButton = buttonContainer
+					.createEl("button", {text: "Edit"});
 				editButton.addClass("mod-cta");
 				editButton.addEventListener("click", () => {
-					const editCustomModelModal = new CustomModelModal(this.app, async (updatedModel: LlmModel) => {
-						this.plugin.settings.customModels[index] = updatedModel;
+					const editCustomModelModal = new OpenApiModal(this.app, async (updatedModel: OpenApiModel) => {
+						this.plugin.settings.models[index] = updatedModel;
 						
 						// If the current model is the one being edited, update it too
 						if (this.plugin.settings.openaiModel.id === model.id) {
@@ -242,16 +242,15 @@ export class AutoTagSettingTab extends PluginSettingTab {
 					editCustomModelModal.open();
 				});
 				
-				const deleteButton = buttonContainer.createEl("button", {
-					text: "Delete"
-				});
+				const deleteButton = buttonContainer
+					.createEl("button", {text: "Delete"});
 				deleteButton.addEventListener("click", async () => {
 					// If the current model is the one being deleted, reset to default
 					if (this.plugin.settings.openaiModel.id === model.id) {
 						this.plugin.settings.openaiModel = OPENAI_API_MODELS[0];
 					}
 					
-					this.plugin.settings.customModels.splice(index, 1);
+					this.plugin.settings.models.splice(index, 1);
 					await this.plugin.saveSettings();
 					this.display(); // Refresh the settings page
 				});
@@ -312,22 +311,67 @@ export class AutoTagSettingTab extends PluginSettingTab {
 	}
 }
 
-// Modal for adding/editing custom models
-export class CustomModelModal extends Modal {
-	model: LlmModel | undefined;
-	onSubmit: (model: LlmModel) => void;
+export class ModelTypeModal extends SuggestModal<ModelType> {
+	onSubmit: (model: OpenApiModel) => void
 
-	constructor(app: App, onSubmit: (model: LlmModel) => void, model?: LlmModel) {
+	constructor(app: App, onSubmit: (model: OpenApiModel) => void) {
+		super(app)
+		this.onSubmit = onSubmit
+	}
+
+	getSuggestions(query: string): ModelType[] {
+		return Object.values(ModelType)
+			.filter((t): t is ModelType => typeof t === 'number')
+			.filter((t: ModelType) =>
+				ModelType[t].toLowerCase().includes(query.toLowerCase())
+			)
+	}
+
+	renderSuggestion(t: ModelType, el: HTMLElement): void {
+		el.createEl('div', { text: t.toString() });
+	}
+
+	onChooseSuggestion(t: ModelType, evt: MouseEvent | KeyboardEvent) {
+		if (t === ModelType.OpenAPI) {
+			new OpenApiModal(this.app, this.onSubmit).open()
+		} else {}
+	}
+}
+
+// Modal for adding/editing custom models
+export class OpenApiModal extends Modal {
+	model: OpenApiModel | undefined;
+	onSubmit: (model: OpenApiModel) => void;
+	type = ModelType.OpenAPI
+
+	constructor(app: App, onSubmit: (model: OpenApiModel) => void, model?: OpenApiModel) {
 		super(app);
 		this.onSubmit = onSubmit;
 		this.model = model;
 	}
+
 
 	onOpen() {
 		const {contentEl} = this;
 		contentEl.empty();
 
 		contentEl.createEl("h2", {text: this.model ? "Edit Custom Model" : "Add Custom Model"});
+
+		// URL
+		const urlSetting = new Setting(contentEl)
+			.setName("Model URL")
+			.setDesc("The API endpoint of the model")
+			.addText(text => text
+				.setPlaceholder("https://example.com")
+			);
+
+		// API key
+		const apiKeySetting = new Setting(contentEl)
+			.setName("API Key")
+			.setDesc("The OpenAI API key for the model")
+			.addText(text => text
+				.setPlaceholder("")
+			);
 
 		// Model ID
 		const modelIdSetting = new Setting(contentEl)
@@ -371,7 +415,7 @@ export class CustomModelModal extends Modal {
 			.setDesc("Cost in USD per 1,000 tokens for input")
 			.addText(text => text
 				.setPlaceholder("0.0005")
-				.setValue(this.model?.inputCost1KTokens?.toString() || "0.0005")
+				.setValue(this.model?.inputCpm?.toString() || "0.0005")
 				.onChange(value => {
 					// Just update the field, we'll collect on submit
 				})
@@ -383,7 +427,7 @@ export class CustomModelModal extends Modal {
 			.setDesc("Cost in USD per 1,000 tokens for output")
 			.addText(text => text
 				.setPlaceholder("0.0015")
-				.setValue(this.model?.outputCost1KTokens?.toString() || "0.0015")
+				.setValue(this.model?.outputCpm?.toString() || "0.0015")
 				.onChange(value => {
 					// Just update the field, we'll collect on submit
 				})
@@ -400,8 +444,10 @@ export class CustomModelModal extends Modal {
 					const contextStr = contextSizeSetting.controlEl.querySelector('input')?.value;
 					const inputCostStr = inputCostSetting.controlEl.querySelector('input')?.value;
 					const outputCostStr = outputCostSetting.controlEl.querySelector('input')?.value;
+					const url = urlSetting.controlEl.querySelector('input')?.value;
+					const apiKey = apiKeySetting.controlEl.querySelector('input')?.value;
 
-					if (!id || !name || !contextStr || !inputCostStr || !outputCostStr) {
+					if (!id || !name || !contextStr || !inputCostStr || !outputCostStr || !url || !apiKey) {
 						new Notice("All fields are required");
 						return;
 					}
@@ -415,14 +461,7 @@ export class CustomModelModal extends Modal {
 						return;
 					}
 
-					const newModel: LlmModel = {
-						id,
-						name,
-						features: ["function-calling"],
-						context,
-						inputCost1KTokens: inputCost,
-						outputCost1KTokens: outputCost
-					};
+					const newModel = new OpenApiModel(url, apiKey, id, name, ["function-calling"], context, inputCost, outputCost)
 
 					this.onSubmit(newModel);
 					this.close();

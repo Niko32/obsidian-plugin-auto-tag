@@ -1,0 +1,6 @@
+{
+    "errors": {
+        "missingApiKey": "<strong>Auto Tag plugin</strong><br>Error: API key is missing. Please add it in the plugin settings.",
+        "noTextSelection": "<strong>Auto Tag plugin</strong><br>Please select some text first."
+    }
+}

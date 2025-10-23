@@ -10,6 +10,7 @@
     "moduleResolution": "node",
     "importHelpers": true,
     "isolatedModules": true,
+    "resolveJsonModule": true,
     "esModuleInterop": true,
     "jsx": "react",
 	  "strictNullChecks": true,
@@ -22,5 +23,5 @@
   },
   "include": [
     "**/*.ts", "**/*.tsx"
-  ]
+  ],
 }

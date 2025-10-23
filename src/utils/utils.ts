@@ -1,4 +1,4 @@
-import {LlmModel} from "../services/models/openai.models";
+import {OpenApiModel} from "../services/models/openai.models";
 import {encodingForModel, TiktokenModel} from "js-tiktoken";
 import {getOpenAIFunctionCallBody} from "../services/openai.api";
 import {AutoTagPluginSettings} from "../plugin/settings/settings";
@@ -92,7 +92,7 @@ export const getTokenCount = (text: string, modelId: string = "gpt-3.5-turbo"): 
  * Given an input string and an LLM AI model data object with cost per token, returns the cost of the input string.
  *
  */
-export const calculateTokenCost = (settings: AutoTagPluginSettings, text: string, modelData: LlmModel): { tokenCount: number, cost: number } => {
+export const calculateTokenCost = (settings: AutoTagPluginSettings, text: string, modelData: OpenApiModel): { tokenCount: number, cost: number } => {
 	const apiCallBody = getOpenAIFunctionCallBody(settings, text);
 	const tokenCount = getTokenCount(apiCallBody, modelData.id);
 	const queryCost = tokenCount / 1000 * modelData.inputCost1KTokens;

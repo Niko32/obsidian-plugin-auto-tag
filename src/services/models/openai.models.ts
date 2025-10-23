@@ -13,20 +13,19 @@ export type GptFunction = {
     parameters?: GptFunctionParameter;
 };
 
-export interface LlmModel {
-	id: string;
-	name: string;
-	description?: string;
-	features: ("function-calling")[];
-	context: number;
-	inputCost1KTokens: number;
-	outputCost1KTokens: number;
-	parameters?: {
-		maxTokens: number;
-		temperature: number;
-		topP: number;
-		presencePenalty: number;
-		frequencyPenalty: number;
-		stop: string[];
-	};
+export enum ModelType {
+	OpenAPI,
+	Ollama
 }
+
+export interface Model {
+	url: string
+
+	/**
+	 * Generates tags describing the given text.
+	 * @param text Input text
+	 * @returns List of generated tags
+	 */
+	generateTags: (text: string) => Promise<string[]>
+}
+

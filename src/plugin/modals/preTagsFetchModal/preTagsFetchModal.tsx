@@ -2,7 +2,7 @@ import {Editor, MarkdownView, Modal} from 'obsidian';
 import {AutoTagPluginSettings} from '../../settings/settings';
 import * as React from "react";
 import {Root, createRoot} from "react-dom/client";
-import {LlmModel} from "../../../services/models/openai.models";
+import {OpenApiModel} from "../../../services/models/openai.models";
 import {calculateTokenCost} from "../../../utils/utils";
 
 export class PreTagsFetchModal extends Modal {
@@ -37,7 +37,7 @@ export class PreTagsFetchModal extends Modal {
 		const {contentEl, editor, settings} = this;
 
 		const selectedText = editor.getSelection() || editor.getValue();
-		const currentModel: LlmModel = this.settings.openaiModel;
+		const currentModel: OpenApiModel = this.settings.openaiModel;
 		const approximateCost = calculateTokenCost(settings, selectedText, currentModel);
 
 		const reactContainer = contentEl.createDiv();

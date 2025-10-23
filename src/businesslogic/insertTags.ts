@@ -1,32 +1,33 @@
 import AutoTagPlugin from "main";
-import {Editor, EditorPosition, MarkdownView, Notice} from "obsidian";
+import {Editor, EditorPosition, MarkdownView, Notice, App, getAllTags, TFile} from "obsidian";
 import {PreUpdateModal} from "src/plugin/modals/preUpdateModal/preUpdateModal";
 import {AutoTagPluginSettings} from "src/plugin/settings/settings";
 import {getTagSuggestions} from "src/services/openai.api";
 import {createDocumentFragment, customCaseConversion} from "src/utils/utils";
 import {kebabCase, camelCase, pascalCase, snakeCase, constantCase, pascalSnakeCase, trainCase} from "change-case";
-import Logger from "../plugin/Logger";
-import {getKnownTags} from "./knownTags";
+import { errors } from "../locales/en.json"
+import { OllamaApi } from "src/services/ollama";
+import { OpenAiApi } from "src/services/openai.api";
 
-const getAutoTags = async (inputText: string, knownTags: string[], settings: AutoTagPluginSettings) => {
+/**
+ * Prompts an llm to generate tags for the given text.
+ * @param text Text to feed into the llm.
+ * @param settings 
+ * @returns 
+ */
+const getAutoTags = async (text: string, settings: AutoTagPluginSettings) => {
 	let autotags: string[];
-	if (settings.openaiApiKey.length > 0) {
-		// Remove the frontmatter from the document; should not be taken into account for tag generation.
-		let mainInputText;
-		try {
-			const YAMLFrontMatter = /---\s*[\s\S]*?\s*---/g;
-			mainInputText = inputText.replace(YAMLFrontMatter, "");
-		} catch (err) {
-			await Logger.error("Error removing frontmatter from message", err);
-			throw new Error("Error removing frontmatter from message" + err);
-		}
-
-		autotags = await getTagSuggestions(settings, mainInputText, knownTags, settings.openaiApiKey) || [];
-	} else {
-		const notice = createDocumentFragment(`<strong>Auto Tag plugin</strong><br>Error: API key is missing. Please add it in the plugin settings.`);
-		new Notice(notice);
+	if (!settings.useCustomBaseUrl && !settings.openaiApiKey.length) {
+		new Notice(createDocumentFragment(errors.missingApiKey));
 		return [];
 	}
+
+	// Remove the frontmatter from the document; should not be taken into account for tag generation.
+	const YAMLFrontMatter = /---\s*[\s\S]*?\s*---/g;
+	text = text.replace(YAMLFrontMatter, "");
+
+	api = settings.useCustomBaseUrl ? OllamaApi : 
+	autotags = await getTagSuggestions(settings, text, settings.openaiApiKey) || [];
 
 	try {
 		// Avoid empty tags
@@ -117,6 +118,29 @@ export const insertTagsInFrontMatter = async (view: MarkdownView, newTags: strin
 	return true;
 };
 
+/**
+ * Get all known tags in the given file or the entire vault.
+ * @param app 
+ * @param file File to search. If no file is given, search the entire vault. 
+ * @returns 
+ */
+export const knownTags = async (app: App, file: TFile | null = null): Promise<string[]> => {
+    const { vault, metadataCache } = app;
+    const tags: string[] = [];
+
+	const files = file ? [file] : vault.getMarkdownFiles();
+
+	for (const f of files) {
+		const mdc = metadataCache.getFileCache(f);
+		if (mdc) {
+			const x = getAllTags(mdc) || [];
+			tags.push(...x)
+		}
+    };
+
+    return tags.map(tag => tag.replace('#', ''));
+}
+
 const insertTags = async (view: MarkdownView, insertLocation: "frontmatter" | "after-selection" | "before-selection", suggestedTags: string[], editor: Editor, settings: AutoTagPluginSettings, initialCursorPos: EditorPosition, selectedTextLength: number) => {
 	if (insertLocation === "frontmatter") {
 		await insertTagsInFrontMatter(view, suggestedTags, editor, settings);
@@ -143,41 +167,42 @@ const insertTags = async (view: MarkdownView, insertLocation: "frontmatter" | "a
 	}
 }
 
+export function commandFnInsertTagsForNote(editor: Editor) {
+	const noteContent = editor.getValue();
+	AutoTagPlugin.Logger.debug(`Finding tags for full note contents (${noteContent.length} chars)`);
+}
+
 /**
  * This function takes the selected text or note contents, fetches tag suggestions for it, and inserts them in the note.
  */
 export const commandFnInsertTagsForSelectedText = async (editor: Editor, view: MarkdownView, settings: AutoTagPluginSettings, insertLocation: "frontmatter" | "after-selection" | "before-selection" = "frontmatter") => {
-	const initialCursorPos: EditorPosition = editor.getCursor();
-
-	/**
-	 * Get the selected text for which to fetch tag suggestions.
-	 */
-	let selectedText = editor.getSelection();
-	const selectedTextLength = selectedText.length;
-
-	if (selectedText) {
-		AutoTagPlugin.Logger.debug(`Finding tags for user-selected text (${selectedText.length} chars)`);
-	} else if (insertLocation === "frontmatter") {
-		selectedText = editor.getValue();
-		AutoTagPlugin.Logger.debug(`Finding tags for full note contents (${selectedText.length} chars)`);
-	} else {
-		const notice = createDocumentFragment(`<strong>Auto Tag plugin</strong><br>Please select some text first.`);
+	if (!settings.useCustomBaseUrl && !settings.openaiApiKey.length) {
+		new Notice(createDocumentFragment(errors.missingApiKey));
+		return [];
+	}
+	
+	const selection = editor.getSelection();
+	if (!selection) {
+		const notice = createDocumentFragment(errors.noTextSelection);
 		new Notice(notice);
 		return;
 	}
+	
+	AutoTagPlugin.Logger.debug(`Finding tags for user-selected text (${selection.length} chars)`);
+	const initialCursorPos: EditorPosition = editor.getCursor();
 
-	if (settings.openaiApiKey.length === 0 || !settings.openaiApiKey) {
-		const notice = createDocumentFragment(`<strong>Auto Tag plugin</strong><br>Error: API key is missing. Please add it in the plugin settings.`);
-		new Notice(notice);
-		return;
+	if settings.useCustomBaseUrl {
+		const api = new OllamaApi()
+	} else {
+		const api = new OpenAiApi(settings.openaiApiKey, settings.openaiModel, settings)
 	}
 
 	const fetchTagsFunction = async () => {
-		const allExistingTags = await getKnownTags(view.app);
-		const pageExistingTags = await getKnownTags(view.app, view.file);
-		const suggestedTags = await getAutoTags(selectedText, allExistingTags, settings) || [];
+		const allTags = await knownTags(view.app);
+		const nodeTags = await knownTags(view.app, view.file);
+		const suggestedTags = await getAutoTags(selection, settings) || [];
 
-		return suggestedTags.filter(x => !pageExistingTags.includes(x));
+		return suggestedTags.filter(x => !nodeTags.includes(x));
 	};
 
 	if (settings.showPreUpdateDialog) {
@@ -187,7 +212,7 @@ export const commandFnInsertTagsForSelectedText = async (editor: Editor, view: M
 			/**
 			 * Insert only the tags accepted by the user in the modal.
 			 */
-			await insertTags(view, insertLocation, acceptedTags, editor, settings, initialCursorPos, selectedTextLength);
+			await insertTags(view, insertLocation, acceptedTags, editor, settings, initialCursorPos, selection.length);
 		};
 
 		const onCancel = () => {
@@ -204,6 +229,6 @@ export const commandFnInsertTagsForSelectedText = async (editor: Editor, view: M
 		/**
 		 * Insert the tags in the note right away.
 		 */
-		await insertTags(view, insertLocation, finalTags, editor, settings, initialCursorPos, selectedTextLength);
+		await insertTags(view, insertLocation, finalTags, editor, settings, initialCursorPos, selection.length);
 	}
 }

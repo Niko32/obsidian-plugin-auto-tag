@@ -1,6 +1,6 @@
-import {LlmModel} from "./models/openai.models";
+import {OpenApiModel} from "./models/openai.models";
 
-export const OPENAI_API_MODELS: LlmModel[] = [
+export const OPENAI_API_MODELS: OpenApiModel[] = [
 	{
 		id: "gpt-3.5-turbo",
 		name: "GPT-3.5 Turbo",
