@@ -8,39 +8,9 @@ import {kebabCase, camelCase, pascalCase, snakeCase, constantCase, pascalSnakeCa
 import Logger from "../plugin/Logger";
 import {getKnownTags} from "./knownTags";
 
-// Several combinations:
-// - insert demo tags or real tags (real -> fetch them first)
-// - insert in frontmatter or after the selected text
-
 const getAutoTags = async (inputText: string, knownTags: string[], settings: AutoTagPluginSettings) => {
 	let autotags: string[];
-	if (settings.demoMode) {
-		// timeout to mimic API call
-		await new Promise(resolve => setTimeout(resolve, 2000));
-
-		autotags = [
-			// English
-			"Healthy and Tasty",
-			// French
-			"Cuisine Facile",
-			// Chinese
-			"健康美味",
-			// Japanese
-			"健康的な美味しい",
-			// Korean
-			"건강하고 맛있는",
-			// Arabic
-			"طعام صحي",
-			// Russian
-			"Здоровая еда",
-			// Hindi
-			"स्वास्थ्यकर और स्वादिष्ट",
-			// Thai
-			"อาหารที่ดีต่อสุขภาพ",
-			// Portuguese
-			"Comida Saudável"
-		];
-	} else if (settings.openaiApiKey.length > 0) {
+	if (settings.openaiApiKey.length > 0) {
 		// Remove the frontmatter from the document; should not be taken into account for tag generation.
 		let mainInputText;
 		try {
@@ -196,7 +166,7 @@ export const commandFnInsertTagsForSelectedText = async (editor: Editor, view: M
 		return;
 	}
 
-	if (!settings.demoMode && (settings.openaiApiKey.length === 0 || !settings.openaiApiKey)) {
+	if (settings.openaiApiKey.length === 0 || !settings.openaiApiKey) {
 		const notice = createDocumentFragment(`<strong>Auto Tag plugin</strong><br>Error: API key is missing. Please add it in the plugin settings.`);
 		new Notice(notice);
 		return;

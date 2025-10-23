@@ -13,7 +13,6 @@ export interface AutoTagPluginSettings {
 	checkCostEstimation: boolean;
 	showPreUpdateDialog: boolean;
 	showPostUpdateDialog: boolean;
-	demoMode: boolean;
 	writeToLogFile: boolean;
 	openaiApiKey: string;
 	openaiModel: LlmModel;
@@ -30,7 +29,6 @@ export const DEFAULT_SETTINGS: AutoTagPluginSettings = {
 	checkCostEstimation: true,
 	showPreUpdateDialog: true,
 	showPostUpdateDialog: true,
-	demoMode: true,
 	writeToLogFile: false,
 	openaiApiKey: "",
 	openaiModel: OPENAI_API_MODELS[0],
@@ -138,25 +136,6 @@ export class AutoTagSettingTab extends PluginSettingTab {
 				this.plugin.settings.showPreUpdateDialog = toggleValue;
 				await this.plugin.saveSettings();
 			});
-		});
-
-		/***************************************
-		 *    Demo settings
-		 ***************************************/
-
-		new Setting(containerEl)
-		.setHeading()
-		.setName('Test mode / Demo mode');
-
-		new Setting(containerEl)
-		.setName(`Use demo mode to test with sample tags`)
-		.setDesc(createDocumentFragment(`Test easily without API key or internet connection.<br>Inserts numbered sample tags, instead of generating real tags. Uses the configured settings.`))
-		.addToggle(toggle => {
-			toggle.setValue(this.plugin.settings.demoMode)
-			toggle.onChange(async (toggleValue: boolean) => {
-				this.plugin.settings.demoMode = toggleValue;
-				await this.plugin.saveSettings();
-			})
 		});
 
 		/***************************************
