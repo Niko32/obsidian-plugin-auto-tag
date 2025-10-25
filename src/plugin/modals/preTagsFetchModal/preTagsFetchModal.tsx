@@ -37,7 +37,7 @@ export class PreTagsFetchModal extends Modal {
 		const {contentEl, editor, settings} = this;
 
 		const selectedText = editor.getSelection() || editor.getValue();
-		const currentModel: OpenApiModel = this.settings.openaiModel;
+		const currentModel: OpenApiModel = this.settings.selectedModel;
 		const approximateCost = calculateTokenCost(settings, selectedText, currentModel);
 
 		const reactContainer = contentEl.createDiv();
@@ -76,11 +76,11 @@ export class PreTagsFetchModal extends Modal {
 						</tr>
 						<tr className="text-sm text-gray-500">
 							<td className="pr-4">Cost per 1K tokens (input)</td>
-							<td>{currentModel.inputCost1KTokens} USD</td>
+							<td>{currentModel.inputCpm} USD</td>
 						</tr>
 						<tr className="text-sm text-gray-500">
 							<td className="pr-4">Cost per 1K tokens (output)</td>
-							<td>{currentModel.outputCost1KTokens} USD</td>
+							<td>{currentModel.outputCpm} USD</td>
 						</tr>
 						</tbody>
 					</table>

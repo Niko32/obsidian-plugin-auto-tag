@@ -19,6 +19,7 @@ export enum ModelType {
 }
 
 export interface Model {
+    label: string
 	url: string
 
 	/**

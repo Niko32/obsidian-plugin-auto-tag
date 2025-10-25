@@ -13,11 +13,11 @@ const llmPromptTagSuggestions = 'Analyze the following text and suggest 5-15 hig
 const llmPromptSystem = 'You are ChatGPT, a backend multilingual tag suggestion module. Your only job is to analyze the semantic content of user-provided text and always return your results by calling the`handleTagSuggestions` function. Never output tags or any explanations directly to the chat. Always extract at least 5 and at most 15 concise, relevant tags for each text, following these rules: - Tags must accurately represent the main topics, entities (names, places, organizations), and semantic themes of the input text. - Tags should use the same language as the input text whenever possible. - Tags should be lowercase and use underscores instead of spaces or special symbols. - Do not generate redundant, repetitive, or overly similar tags. - For long texts, summarize the main topics and entities first, then generate tags based on your summary. - Only respond by calling the function, never as plain text.'
 const gptTagHandlingFunctionDescription = 'This function receives a list of tags that best describe the user-provided input text for categorization, search, or semantic linking. Tags should be concise, use lowercase letters and underscores, and match the language of the input text. Tags must not be redundant or overly similar. Always return at least 5 and at most 15 tags.';
 
-export class OpenApiModel implements Model {
+export class OpenAiModel implements Model {
 	url: string
-	apiKey: string
+	apiKey?: string
 	id: string;
-	name: string;
+	label: string;
 	description?: string;
 	features: ("function-calling")[];
 	context: number;
@@ -32,16 +32,17 @@ export class OpenApiModel implements Model {
 		stop: string[];
 	};
 
-	constructor(url: string, id: string, apiKey: string, name: string, features: ("function-calling")[], context: number, inputCpm: number, outputCpm: number) {
-		this.url = url // TODO: use
+	constructor(id: string, label: string, features: ("function-calling")[], context: number, inputCpm: number, outputCpm: number, apiKey?: string) {
+		this.url = "https://api.openai.com/v1/chat/completions"
 		this.apiKey = apiKey
 		this.id = id
-		this.name = name
+		this.label = label
 		this.features = features
 		this.context = context
 		this.inputCpm = inputCpm
 		this.outputCpm = outputCpm
 	}
+	
 	async generateTags(text: string) {
 		const body = JSON.stringify({
 			model: this.id,
@@ -99,106 +100,92 @@ export const gptFunction: GptFunction = {
 	},
 };
 
-// 获取API endpoint URL
-function getApiEndpoint(settings: AutoTagPluginSettings): string {
-	if (settings.useCustomBaseUrl && settings.customBaseUrl) {
-		// 确保URL以/结尾
-		const baseUrl = settings.customBaseUrl.endsWith('/') 
-			? settings.customBaseUrl 
-			: `${settings.customBaseUrl}/`;
-			
-		// 假设自定义API也使用chat/completions端点，如果不是，可能需要额外配置
-		return `${baseUrl}chat/completions`;
-	}
-	return DEFAULT_OPENAI_API_URL;
-}
+// export async function getTagSuggestions(settings: AutoTagPluginSettings, inputText: string, openaiApiKey: string): Promise<string[] | null> {
+// 	if (!settings.useCustomBaseUrl && !openaiApiKey) {
+// 		new Notice(createDocumentFragment(errors.missingApiKey));
+// 		return [];
+// 	}
 
-export async function getTagSuggestions(settings: AutoTagPluginSettings, inputText: string, openaiApiKey: string): Promise<string[] | null> {
-	if (!settings.useCustomBaseUrl && !openaiApiKey) {
-		new Notice(createDocumentFragment(errors.missingApiKey));
-		return [];
-	}
+// 	try {
+// 		const responseData: {
+// 			tags?: string[],
+// 			error?: { type: string, message: string, param: any, code: any }
+// 		} = await fetchOpenAIFunctionCall(settings, openaiApiKey, inputText, gptFunction);
 
-	try {
-		const responseData: {
-			tags?: string[],
-			error?: { type: string, message: string, param: any, code: any }
-		} = await fetchOpenAIFunctionCall(settings, openaiApiKey, inputText, gptFunction);
+// 		if (responseData?.tags) {
+// 			AutoTagPlugin.Logger.debug('LLM API suggested tags:', JSON.stringify(responseData));
+// 			return responseData.tags;
+// 		} else if (responseData?.error) {
+// 			AutoTagPlugin.Logger.error('LLM API response is missing a "tags" property.', JSON.stringify(responseData));
+// 			new Notice(createDocumentFragment(`<strong>Auto Tag plugin</strong><br>Error: {{errorMessage}}`, {errorMessage: responseData.error.message}));
+// 			throw new Error('LLM API response is missing a "tags" property.');
+// 		}
+// 	} catch (error) {
+// 		throw Error(JSON.stringify(error, null, 2));
+// 	}
 
-		if (responseData?.tags) {
-			AutoTagPlugin.Logger.debug('LLM API suggested tags:', JSON.stringify(responseData));
-			return responseData.tags;
-		} else if (responseData?.error) {
-			AutoTagPlugin.Logger.error('LLM API response is missing a "tags" property.', JSON.stringify(responseData));
-			new Notice(createDocumentFragment(`<strong>Auto Tag plugin</strong><br>Error: {{errorMessage}}`, {errorMessage: responseData.error.message}));
-			throw new Error('LLM API response is missing a "tags" property.');
-		}
-	} catch (error) {
-		throw Error(JSON.stringify(error, null, 2));
-	}
+// 	return [];
+// }
 
-	return [];
-}
-
-export function getOpenAIFunctionCallBody(settings: AutoTagPluginSettings, inputText: string) {
-	return JSON.stringify({
-		model: settings.openaiModel.id,
-		max_tokens: settings.openaiModel.parameters?.maxTokens, // could set a multiple of the max number of tags desired
-		temperature: settings.openaiTemperature,
-		messages: [
-			{
-				role: 'system',
-				content: llmPromptSystem,
-			},
-			{
-				role: 'user',
-				content: llmPromptTagSuggestions + "<text>\n" + inputText + "\n</text>",
-			},
-		],
-		functions: [gptFunction],
-		function_call: {name: gptFunction.name},
-	});
-}
+// export function getOpenAIFunctionCallBody(settings: AutoTagPluginSettings, inputText: string) {
+// 	return JSON.stringify({
+// 		model: settings.selectedModel.label,
+// 		max_tokens: settings.selectedModel.parameters?.maxTokens, // could set a multiple of the max number of tags desired
+// 		temperature: settings.openaiTemperature,
+// 		messages: [
+// 			{
+// 				role: 'system',
+// 				content: llmPromptSystem,
+// 			},
+// 			{
+// 				role: 'user',
+// 				content: llmPromptTagSuggestions + "<text>\n" + inputText + "\n</text>",
+// 			},
+// 		],
+// 		functions: [gptFunction],
+// 		function_call: {name: gptFunction.name},
+// 	});
+// }
 
 /**
  * Uses LLM API to request tags for the given input text.
  * Uses Function Calling to easily handle the response.
  */
-export async function fetchOpenAIFunctionCall(settings: AutoTagPluginSettings, openaiApiKey: string, inputText: string, gptFunction: GptFunction): Promise<{
-	tags: string[]
-}> {
-	if (inputText.trim().length === 0) {
-		AutoTagPlugin.Logger.warn('fetchOpenAIFunctionCall: invalid input text.', JSON.stringify(inputText));
-		throw new Error('fetchOpenAIFunctionCall: invalid input text.');
-	}
+// export async function fetchOpenAIFunctionCall(settings: AutoTagPluginSettings, openaiApiKey: string, inputText: string, gptFunction: GptFunction): Promise<{
+// 	tags: string[]
+// }> {
+// 	if (inputText.trim().length === 0) {
+// 		AutoTagPlugin.Logger.warn('fetchOpenAIFunctionCall: invalid input text.', JSON.stringify(inputText));
+// 		throw new Error('fetchOpenAIFunctionCall: invalid input text.');
+// 	}
 
-	const apiEndpoint = getApiEndpoint(settings);
-	const requestBody = getOpenAIFunctionCallBody(settings, inputText);
+// 	const apiEndpoint = getApiEndpoint(settings);
+// 	const requestBody = getOpenAIFunctionCallBody(settings, inputText);
 
-	try {
-		AutoTagPlugin.Logger.log(`LLM API request starting...`);
-		AutoTagPlugin.Logger.debug(`Using API endpoint: ${apiEndpoint}`);
+// 	try {
+// 		AutoTagPlugin.Logger.log(`LLM API request starting...`);
+// 		AutoTagPlugin.Logger.debug(`Using API endpoint: ${apiEndpoint}`);
 		
-		const response: RequestUrlResponse = await requestUrl({
-			url: apiEndpoint,
-			method: "POST",
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${openaiApiKey}`,
-			},
-			body: requestBody
-		});
-		AutoTagPlugin.Logger.log(`LLM API request response received.`);
+// 		const response: RequestUrlResponse = await requestUrl({
+// 			url: apiEndpoint,
+// 			method: "POST",
+// 			headers: {
+// 				'Content-Type': 'application/json',
+// 				Authorization: `Bearer ${openaiApiKey}`,
+// 			},
+// 			body: requestBody
+// 		});
+// 		AutoTagPlugin.Logger.log(`LLM API request response received.`);
 
-		if (response.status === 200 && response.json?.choices?.[0]?.message?.function_call) {
-			return JSON.parse(response.json.choices[0].message.function_call.arguments);
-		} else if (response.json.error) {
-			AutoTagPlugin.Logger.error(`LLM API request Error:`, JSON.stringify(response.json));
-			return JSON.parse(response.json);
-		} else {
-			throw new Error('Error: Failed to get tags from OpenAI API.');
-		}
-	} catch (error) {
-		throw new Error(`LLM API request Error: ` + error?.response?.data?.error?.message || JSON.stringify(error, null, 2));
-	}
-}
+// 		if (response.status === 200 && response.json?.choices?.[0]?.message?.function_call) {
+// 			return JSON.parse(response.json.choices[0].message.function_call.arguments);
+// 		} else if (response.json.error) {
+// 			AutoTagPlugin.Logger.error(`LLM API request Error:`, JSON.stringify(response.json));
+// 			return JSON.parse(response.json);
+// 		} else {
+// 			throw new Error('Error: Failed to get tags from OpenAI API.');
+// 		}
+// 	} catch (error) {
+// 		throw new Error(`LLM API request Error: ` + error?.response?.data?.error?.message || JSON.stringify(error, null, 2));
+// 	}
+// }

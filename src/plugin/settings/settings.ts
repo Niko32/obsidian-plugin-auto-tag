@@ -2,8 +2,8 @@ import {App, FileSystemAdapter, Modal, Notice, PluginSettingTab, Setting, Sugges
 import AutoTagPlugin from "../autoTagPlugin";
 import {createDocumentFragment} from "src/utils/utils";
 import {OPENAI_API_MODELS} from "../../services/openaiModelsList";
-import {ModelType} from "../../services/models/openai.models";
-import { OpenApiModel } from "src/services/openai.api";
+import {Model, ModelType} from "../../services/models/openai.models";
+import { OpenAiModel } from "src/services/openai.api";
 import { features } from "process";
 
 export interface AutoTagPluginSettings {
@@ -15,11 +15,11 @@ export interface AutoTagPluginSettings {
 	showPostUpdateDialog: boolean;
 	writeToLogFile: boolean;
 	openaiApiKey: string;
-	openaiModel: OpenApiModel;
+	selectedModel: Model;
 	openaiTemperature: number;
 	customBaseUrl: string;
 	useCustomBaseUrl: boolean;
-	models: OpenApiModel[];
+	models: OpenAiModel[];
 }
 
 export const DEFAULT_SETTINGS: AutoTagPluginSettings = {
@@ -31,11 +31,11 @@ export const DEFAULT_SETTINGS: AutoTagPluginSettings = {
 	showPostUpdateDialog: true,
 	writeToLogFile: false,
 	openaiApiKey: "",
-	openaiModel: OPENAI_API_MODELS[0],
+	selectedModel: OPENAI_API_MODELS[0],
 	openaiTemperature: 0.2,
 	customBaseUrl: "",
 	useCustomBaseUrl: false,
-	models: [],
+	models: OPENAI_API_MODELS,
 }
 
 export class AutoTagSettingTab extends PluginSettingTab {
@@ -171,18 +171,14 @@ export class AutoTagSettingTab extends PluginSettingTab {
 		// 	);
 		// }
 
-		const getAllModels = () => {
-			return [...OPENAI_API_MODELS, ...this.plugin.settings.models];
-		};
-
 		new Setting(containerEl)
 		.setName(`API model`)
 		.setDesc(createDocumentFragment(`The model used to generate tags.`))
 		.addDropdown(dropdown => {
-				getAllModels().forEach(model => dropdown.addOption(model.id, model.name));
-				dropdown.setValue(`${this.plugin.settings.openaiModel.id}`);
+				this.plugin.settings.models.forEach(model => dropdown.addOption(model.id, model.label));
+				dropdown.setValue(`${this.plugin.settings.selectedModel.label}`);
 				dropdown.onChange(async (value) => {
-					this.plugin.settings.openaiModel = getAllModels().find(model => model.id === value) || getAllModels()[0];
+					this.plugin.settings.selectedModel = this.plugin.settings.models.find(model => model.id === value) || this.plugin.settings.models[0];
 					await this.plugin.saveSettings();
 				});
 			}
@@ -194,7 +190,7 @@ export class AutoTagSettingTab extends PluginSettingTab {
 		.addButton(button => button
 			.setButtonText("+")
 			.onClick(async () => {
-				new ModelTypeModal(this.app, async (model: OpenApiModel) => {
+				new ModelTypeModal(this.app, async (model: OpenAiModel) => {
 					this.plugin.settings.models.push(model);
 					await this.plugin.saveSettings();
 					this.display(); // Refresh the settings page
@@ -216,10 +212,10 @@ export class AutoTagSettingTab extends PluginSettingTab {
 				
 				const modelInfo = modelContainer.createDiv();
 				modelInfo.innerHTML = `
-					<strong>${model.name}</strong> (${model.id})<br>
+					<strong>${model.label}</strong> (${model.id})<br>
 					Context: ${model.context}`
-					// Input cost: ${model.inputCost1KTokens},
-					// Output cost: ${model.outputCost1KTokens}`;
+					// Input cost: ${model.inputCpm},
+					// Output cost: ${model.outputCpm}`;
 				
 				const buttonContainer = modelContainer.createDiv();
 				buttonContainer.addClass("custom-model-buttons");
@@ -228,12 +224,12 @@ export class AutoTagSettingTab extends PluginSettingTab {
 					.createEl("button", {text: "Edit"});
 				editButton.addClass("mod-cta");
 				editButton.addEventListener("click", () => {
-					const editCustomModelModal = new OpenApiModal(this.app, async (updatedModel: OpenApiModel) => {
+					const editCustomModelModal = new OpenApiModelModal(this.app, async (updatedModel: OpenAiModel) => {
 						this.plugin.settings.models[index] = updatedModel;
 						
 						// If the current model is the one being edited, update it too
-						if (this.plugin.settings.openaiModel.id === model.id) {
-							this.plugin.settings.openaiModel = updatedModel;
+						if (this.plugin.settings.selectedModel.label === model.id) {
+							this.plugin.settings.selectedModel = updatedModel;
 						}
 						
 						await this.plugin.saveSettings();
@@ -246,8 +242,8 @@ export class AutoTagSettingTab extends PluginSettingTab {
 					.createEl("button", {text: "Delete"});
 				deleteButton.addEventListener("click", async () => {
 					// If the current model is the one being deleted, reset to default
-					if (this.plugin.settings.openaiModel.id === model.id) {
-						this.plugin.settings.openaiModel = OPENAI_API_MODELS[0];
+					if (this.plugin.settings.selectedModel.label === model.id) {
+						this.plugin.settings.selectedModel = OPENAI_API_MODELS[0];
 					}
 					
 					this.plugin.settings.models.splice(index, 1);
@@ -312,9 +308,9 @@ export class AutoTagSettingTab extends PluginSettingTab {
 }
 
 export class ModelTypeModal extends SuggestModal<ModelType> {
-	onSubmit: (model: OpenApiModel) => void
+	onSubmit: (model: OpenAiModel) => void
 
-	constructor(app: App, onSubmit: (model: OpenApiModel) => void) {
+	constructor(app: App, onSubmit: (model: OpenAiModel) => void) {
 		super(app)
 		this.onSubmit = onSubmit
 	}
@@ -333,18 +329,21 @@ export class ModelTypeModal extends SuggestModal<ModelType> {
 
 	onChooseSuggestion(t: ModelType, evt: MouseEvent | KeyboardEvent) {
 		if (t === ModelType.OpenAPI) {
-			new OpenApiModal(this.app, this.onSubmit).open()
+			new OpenApiModelModal(this.app, this.onSubmit).open()
 		} else {}
 	}
 }
 
-// Modal for adding/editing custom models
-export class OpenApiModal extends Modal {
-	model: OpenApiModel | undefined;
-	onSubmit: (model: OpenApiModel) => void;
+/**
+ * Modal for adding/editing custom models
+ * @param model If given, edit a model instead of creating one
+ */
+export class OpenApiModelModal extends Modal {
+	model: OpenAiModel | undefined;
+	onSubmit: (model: OpenAiModel) => void;
 	type = ModelType.OpenAPI
 
-	constructor(app: App, onSubmit: (model: OpenApiModel) => void, model?: OpenApiModel) {
+	constructor(app: App, onSubmit: (model: OpenAiModel) => void, model?: OpenAiModel) {
 		super(app);
 		this.onSubmit = onSubmit;
 		this.model = model;
@@ -391,7 +390,7 @@ export class OpenApiModal extends Modal {
 			.setDesc("The display name of the model")
 			.addText(text => text
 				.setPlaceholder("My Custom Model")
-				.setValue(this.model?.name || "")
+				.setValue(this.model?.label || "")
 				.onChange(value => {
 					// Just update the field, we'll collect on submit
 				})
@@ -461,7 +460,7 @@ export class OpenApiModal extends Modal {
 						return;
 					}
 
-					const newModel = new OpenApiModel(url, apiKey, id, name, ["function-calling"], context, inputCost, outputCost)
+					const newModel = new OpenAiModel(id, name, ["function-calling"], context, inputCost, outputCost, apiKey)
 
 					this.onSubmit(newModel);
 					this.close();

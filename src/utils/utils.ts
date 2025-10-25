@@ -95,8 +95,8 @@ export const getTokenCount = (text: string, modelId: string = "gpt-3.5-turbo"): 
 export const calculateTokenCost = (settings: AutoTagPluginSettings, text: string, modelData: OpenApiModel): { tokenCount: number, cost: number } => {
 	const apiCallBody = getOpenAIFunctionCallBody(settings, text);
 	const tokenCount = getTokenCount(apiCallBody, modelData.id);
-	const queryCost = tokenCount / 1000 * modelData.inputCost1KTokens;
-	const responseCost = tokenCount / 1000 * modelData.outputCost1KTokens;
+	const queryCost = tokenCount / 1000 * modelData.inputCpm;
+	const responseCost = tokenCount / 1000 * modelData.outputCpm;
 	const cost = queryCost + responseCost;
 
 	return {
