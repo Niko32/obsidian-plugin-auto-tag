@@ -14,7 +14,7 @@ export type GptFunction = {
 };
 
 export enum ModelType {
-	OpenAPI,
+	OpenAI,
 	Ollama
 }
 

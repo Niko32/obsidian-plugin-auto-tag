@@ -171,40 +171,13 @@ export class AutoTagSettingTab extends PluginSettingTab {
 		// 	);
 		// }
 
-		new Setting(containerEl)
-		.setName(`API model`)
-		.setDesc(createDocumentFragment(`The model used to generate tags.`))
-		.addDropdown(dropdown => {
-				this.plugin.settings.models.forEach(model => dropdown.addOption(model.id, model.label));
-				dropdown.setValue(`${this.plugin.settings.selectedModel.label}`);
-				dropdown.onChange(async (value) => {
-					this.plugin.settings.selectedModel = this.plugin.settings.models.find(model => model.id === value) || this.plugin.settings.models[0];
-					await this.plugin.saveSettings();
-				});
-			}
-		);
-
-		new Setting(containerEl)
-		.setName(`Add model`)
-		.setDesc(createDocumentFragment(`Add a model to use with the API.`))
-		.addButton(button => button
-			.setButtonText("+")
-			.onClick(async () => {
-				new ModelTypeModal(this.app, async (model: OpenAiModel) => {
-					this.plugin.settings.models.push(model);
-					await this.plugin.saveSettings();
-					this.display(); // Refresh the settings page
-				}).open();
-			})
-		);
-
 		// Display custom models with edit/delete buttons
 		if (this.plugin.settings.models.length > 0) {
 			const modelsContainer = containerEl.createDiv();
 			modelsContainer.addClass("custom-models-container");
 			
 			const customModelsHeader = modelsContainer
-				.createEl("h3", {text: "Custom Models"});
+				.createEl("h3", {text: "Models"});
 			
 			this.plugin.settings.models.forEach((model, index) => {
 				const modelContainer = modelsContainer.createDiv();
@@ -224,7 +197,7 @@ export class AutoTagSettingTab extends PluginSettingTab {
 					.createEl("button", {text: "Edit"});
 				editButton.addClass("mod-cta");
 				editButton.addEventListener("click", () => {
-					const editCustomModelModal = new OpenApiModelModal(this.app, async (updatedModel: OpenAiModel) => {
+					const editCustomModelModal = new OpenAiModelModal(this.app, async (updatedModel: OpenAiModel) => {
 						this.plugin.settings.models[index] = updatedModel;
 						
 						// If the current model is the one being edited, update it too
@@ -254,31 +227,58 @@ export class AutoTagSettingTab extends PluginSettingTab {
 		}
 
 		new Setting(containerEl)
-		.setName(`Predictability of the results`)
-		.setDesc(createDocumentFragment(`You can change how "creative" the results will be.<br>The default value ("More predictable") offers a good balance between creativity and predictability.`))
-			.addDropdown(dropdown => dropdown
-				.addOption("0.2", 'More predictable')
-				.addOption("0.9", 'More creative')
-				.setValue(`${this.plugin.settings.openaiTemperature}`)
-				.onChange(async (value) => {
-					this.plugin.settings.openaiTemperature = parseFloat(value);
+		.setName(`Add model`)
+		.setDesc(createDocumentFragment(`Add a model to use with the API.`))
+		.addButton(button => button
+			.setButtonText("+")
+			.onClick(async () => {
+				new ModelTypeModal(this.app, async (model: OpenAiModel) => {
+					this.plugin.settings.models.push(model);
 					await this.plugin.saveSettings();
-					console.debug('this.plugin.settings.openaiTemperature', this.plugin.settings.openaiTemperature);
-				})
-			);
-
-		new Setting(containerEl)
-		.setName('API key')
-		.setDesc(createDocumentFragment(`API key for authentication. For OpenAI, create a new API key at <a href="https://platform.openai.com" target="_blank">https://platform.openai.com</a>, set up your billing (set a max limit of 1$ or 5$ for example) and paste the key here.`))
-		.addText(text => text
-			.setPlaceholder('secret-key-...')
-			.setValue(this.plugin.settings.openaiApiKey)
-			.onChange(async (value) => {
-				this.plugin.settings.openaiApiKey = value;
-				await this.plugin.saveSettings();
-				new Notice('API key saved.');
+					this.display(); // Refresh the settings page
+				}).open();
 			})
 		);
+
+		new Setting(containerEl)
+		.setName(`Select model`)
+		.setDesc(createDocumentFragment(`The model used to generate tags.`))
+		.addDropdown(dropdown => {
+				this.plugin.settings.models.forEach(model => dropdown.addOption(model.label, model.label));
+				dropdown.setValue(`${this.plugin.settings.selectedModel.label}`);
+				dropdown.onChange(async (value) => {
+					this.plugin.settings.selectedModel = this.plugin.settings.models.find(model => model.label === value) || this.plugin.settings.models[0];
+					await this.plugin.saveSettings();
+				});
+			}
+		);
+
+		// new Setting(containerEl)
+		// .setName('OpenAI API key')
+		// .setDesc(createDocumentFragment(`API key for authentication. For OpenAI, create a new API key at <a href="https://platform.openai.com" target="_blank">https://platform.openai.com</a>, set up your billing (set a max limit of 1$ or 5$ for example) and paste the key here.`))
+		// .addText(text => text
+		// 	.setPlaceholder('secret-key-...')
+		// 	.setValue(this.plugin.settings.openaiApiKey)
+		// 	.onChange(async (value) => {
+		// 		this.plugin.settings.openaiApiKey = value;
+		// 		await this.plugin.saveSettings();
+		// 		new Notice('API key saved.');
+		// 	})
+		// );
+
+		// new Setting(containerEl)
+		// .setName(`Predictability of the results`)
+		// .setDesc(createDocumentFragment(`You can change how "creative" the results will be.<br>The default value ("More predictable") offers a good balance between creativity and predictability.`))
+		// 	.addDropdown(dropdown => dropdown
+		// 		.addOption("0.2", 'More predictable')
+		// 		.addOption("0.9", 'More creative')
+		// 		.setValue(`${this.plugin.settings.openaiTemperature}`)
+		// 		.onChange(async (value) => {
+		// 			this.plugin.settings.openaiTemperature = parseFloat(value);
+		// 			await this.plugin.saveSettings();
+		// 			console.debug('this.plugin.settings.openaiTemperature', this.plugin.settings.openaiTemperature);
+		// 		})
+		// 	);
 
 		/***************************************
 		 *    Debugging info & stats
@@ -316,20 +316,22 @@ export class ModelTypeModal extends SuggestModal<ModelType> {
 	}
 
 	getSuggestions(query: string): ModelType[] {
-		return Object.values(ModelType)
-			.filter((t): t is ModelType => typeof t === 'number')
-			.filter((t: ModelType) =>
-				ModelType[t].toLowerCase().includes(query.toLowerCase())
+		const suggestions = Object.values(ModelType)
+			.filter((t) => typeof t === "string")
+			.filter((t) =>
+				t.toLowerCase().includes(query.toLowerCase())
 			)
+			.map(t => ModelType[t as keyof typeof ModelType])
+		return suggestions
 	}
 
 	renderSuggestion(t: ModelType, el: HTMLElement): void {
-		el.createEl('div', { text: t.toString() });
+		el.createEl('div', { text: ModelType[t] });
 	}
 
 	onChooseSuggestion(t: ModelType, evt: MouseEvent | KeyboardEvent) {
-		if (t === ModelType.OpenAPI) {
-			new OpenApiModelModal(this.app, this.onSubmit).open()
+		if (t === ModelType.OpenAI) {
+			new OpenAiModelModal(this.app, this.onSubmit).open()
 		} else {}
 	}
 }
@@ -338,10 +340,10 @@ export class ModelTypeModal extends SuggestModal<ModelType> {
  * Modal for adding/editing custom models
  * @param model If given, edit a model instead of creating one
  */
-export class OpenApiModelModal extends Modal {
+export class OpenAiModelModal extends Modal {
 	model: OpenAiModel | undefined;
 	onSubmit: (model: OpenAiModel) => void;
-	type = ModelType.OpenAPI
+	type = ModelType.OpenAI
 
 	constructor(app: App, onSubmit: (model: OpenAiModel) => void, model?: OpenAiModel) {
 		super(app);
@@ -354,7 +356,7 @@ export class OpenApiModelModal extends Modal {
 		const {contentEl} = this;
 		contentEl.empty();
 
-		contentEl.createEl("h2", {text: this.model ? "Edit Custom Model" : "Add Custom Model"});
+		contentEl.createEl("h2", {text: this.model ? "Edit Model" : "Add Model"});
 
 		// URL
 		const urlSetting = new Setting(contentEl)
